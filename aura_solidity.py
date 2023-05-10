@@ -49,15 +49,18 @@ class App:
         query_vals['pragma_version'] = main_contract.get("pragma")
         query_vals['wallet_address'] = wallet_address
 
-
         # create the relationships
         alternate_contracts = list(filter(lambda x: x.get("main_contract") == False, parsed_contracts))
 
         # loop through main_contract imports
         for idx, import_contract in enumerate(main_contract.get("imports"), start=2):
+
             import_name = import_contract.split("/")[-1].split(".")[0]
             # check if import is in alternate_contracts
-            import_contact_details = next(filter(lambda x: f'|{import_name}(' in x.get("contracts"), alternate_contracts))
+            try:
+                import_contact_details = next(filter(lambda x: f'|{import_name}(' in x.get("contracts"), alternate_contracts))
+            except StopIteration:
+                continue
             
             # create the node
             query += "MERGE (p" + str(idx) + ":Import {" + f"import_name: $import_name_{idx}, pragma_version: $pragma_version_{idx}, path: $path_{idx} " + "}) \n"
@@ -124,10 +127,9 @@ class App:
             session.run("MATCH (n) DETACH DELETE n")
             print("All nodes and relationships have been deleted from the database.")
 
-def bfs_dir(root_dir: str):
+def bfs_dir(root_dir: str, max_files: int):
     queue = deque()
     queue.append(root_dir)
-    max_queue = 10
     files = []
 
     while queue:
@@ -147,7 +149,7 @@ def bfs_dir(root_dir: str):
                 elif os.path.isfile(path):
                     files.append(path)
 
-                if len(queue) == max_queue:
+                if len(files) == max_files:
                     break
 
         except PermissionError:
@@ -161,7 +163,7 @@ def main():
     user = os.environ.get("NEO4J_USERNAME")
     password = os.environ.get("NEO4J_PASSWORD")
 
-    files = bfs_dir("./test")
+    files = bfs_dir("./test", max_files=1)
     # print(files)
 
     app = App(uri, user, password)
@@ -173,7 +175,7 @@ def main():
             with open(file) as f:
                 solidity = f.read()
 
-            wallet_address = file.split("_")[0]
+            wallet_address = file.rsplit('/', maxsplit=1)[-1].split("_")[0]
 
             ast = parser.parse(solidity)
 
